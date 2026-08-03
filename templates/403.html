@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Sin permiso · Growth Innovation{% endblock %}
+{% block body %}
+<section class="intro">
+  <div class="wrap">
+    <span class="eyebrow">Acceso restringido</span>
+    <h1>Esta sección es solo para administradores.</h1>
+    <p class="adm-vacio">
+      El panel se limita a los correos de la variable <code>ADMIN_EMAILS</code>.
+      Si necesitas entrar, pide que te agreguen a esa lista.
+    </p>
+    <p><a class="link-btn" href="{{ url_for('index') }}">← Volver a los experimentos</a></p>
+  </div>
+</section>
+{% endblock %}

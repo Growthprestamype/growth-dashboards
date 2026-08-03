@@ -22,7 +22,7 @@
         <span class="brand-name">Growth Innovation</span>
         <span class="brand-tag">Experimentos de la Bitacorita</span>
       </a>
-      <nav>{% if session.get('email') %}<span class="who">{{ session['email'] }}</span>{% else %}<span>Prestamype</span>{% endif %}<a class="logout" href="{{ url_for('auth.logout') }}">Salir</a></nav>
+      <nav>{% if session.get('email') %}<span class="who">{{ session['email'] }}</span>{% else %}<span>Prestamype</span>{% endif %}{% if es_admin %}<a class="adm-enlace" href="{{ url_for('admin.inicio') }}">Administración</a>{% endif %}<a class="logout" href="{{ url_for('auth.logout') }}">Salir</a></nav>
     </div>
   </header>
 

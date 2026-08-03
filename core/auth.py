@@ -72,12 +72,16 @@ REENVIO_ESPERA_SEG = 60
 
 
 def _permitidos() -> set[str]:
-    crudo = os.environ.get("ALLOWED_EMAILS", "")
-    if crudo.strip():
-        lista = [e.strip().lower() for e in crudo.split(",") if e.strip()]
-    else:
-        lista = PERMITIDOS_DEFAULT
-    return set(lista)
+    """Lista efectiva: la variable de entorno mas las altas y bajas que el
+    administrador haya hecho desde el panel (core.panel)."""
+    try:
+        from core import panel
+        return panel.permitidos()
+    except Exception:
+        crudo = os.environ.get("ALLOWED_EMAILS", "")
+        if crudo.strip():
+            return {e.strip().lower() for e in crudo.split(",") if e.strip()}
+        return set(PERMITIDOS_DEFAULT)
 
 
 def _correo_valido(correo: str) -> tuple[bool, str]:
@@ -87,7 +91,8 @@ def _correo_valido(correo: str) -> tuple[bool, str]:
     if not correo.endswith(DOMINIO):
         return False, f"Solo se permiten correos {DOMINIO}."
     if correo not in _permitidos():
-        return False, "Este correo no está en la lista de accesos permitidos."
+        return False, ("Este correo no tiene acceso. Pide al administrador "
+                       "que te agregue desde el panel.")
     return True, correo
 
 
@@ -361,6 +366,10 @@ def verificar():
     session["auth"] = True
     session["email"] = correo
     session.permanent = True
+
+    from core import analitica, panel
+    session["admin"] = panel.es_admin(correo)
+    analitica.registrar("acceso", correo=correo)
     return redirect(nxt)
 
 

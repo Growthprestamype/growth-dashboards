@@ -15,6 +15,11 @@ la app la descubre y la publica sola.
 growth-dashboards/
 ├── app.py                  # rutas (genéricas, no conocen ningún proyecto)
 ├── core/registry.py        # descubre las carpetas de projects/
+├── core/origen.py          # conexión al origen externo de datos
+├── core/datos.py           # sincroniza <origen>/<proyecto>/ -> data/ + fechas
+├── core/analitica.py       # eventos de uso (accesos y vistas)
+├── core/panel.py           # permisos y estado de dashboards (en caliente)
+├── core/admin.py           # panel de administración (/admin)
 ├── templates/              # base, mosaico (index), shell de dashboard, 404
 ├── static/css/main.css     # estilo (crema · hueso · gris oscuro · Lato)
 ├── projects/
@@ -70,6 +75,87 @@ git push -u origin main
 > Plan Free de Render: el servicio se duerme tras inactividad; la primera
 > carga tras dormir tarda unos segundos.
 
+## Origen de los datos (y la fecha que ven las tarjetas)
+
+La data **ya no vive dentro de este repositorio**. La app se conecta a una
+ubicación externa organizada con **una carpeta por proyecto, con el nombre
+del proyecto**:
+
+```
+<origen>/
+├── fast_track/
+│   ├── Data_Historica.csv
+│   └── Data_Seguimiento.csv
+├── descuento_en_tasas/
+│   └── ...
+└── _plataforma/            # lo escribe la app: analítica y permisos
+```
+
+Al arrancar (y como máximo cada 15 minutos, o cuando se pulsa **Sincronizar
+datos** en el panel), la app baja esos archivos a `projects/<proyecto>/data/`
+y deja junto a ellos un `_fechas.json` con la **fecha real de subida de cada
+archivo**. Los `processor.py` no cambian: siguen leyendo su carpeta `data/`.
+
+### Por qué todas las tarjetas mostraban la misma fecha
+
+Render clona el repositorio con `--depth 1`. Con un solo commit en la
+historia, `git log` devuelve **la misma marca de tiempo para todos los
+archivos** (la del último push), y la fecha de modificación en disco es la
+del checkout. Por eso, al actualizar un solo CSV, todas las tarjetas se
+"actualizaban" juntas.
+
+Ahora la fecha sale, en este orden: `_fechas.json` (la del origen) →
+`git log` **solo si el clon tiene historia completa** → fecha del archivo en
+disco. Cada proyecto y cada archivo conserva la suya.
+
+### Configuración
+
+| Variable | Para qué |
+|---|---|
+| `DATA_ORIGEN` | `local` (por defecto), `carpeta` o `github` |
+| `DATA_CARPETA` | Modo `carpeta`: ruta base (disco montado, unidad de red, carpeta sincronizada de Drive/OneDrive) |
+| `DATA_REPO` | Modo `github`: `usuario/growth-data` |
+| `DATA_TOKEN` | Token fino con permiso *Contents: Read and write* sobre ese repo (si no, se usa `GITHUB_TOKEN`) |
+| `DATA_RAMA` | Rama del repo de datos (por defecto `main`) |
+| `DATA_PREFIJO` | Subcarpeta base dentro del repo, opcional |
+
+**Recomendado en Render: modo `github`** con un repositorio privado solo para
+datos. Es gratis, no necesita disco de pago, queda versionado y —lo
+importante— la API de commits da la fecha real *por archivo*, que es
+exactamente "cuándo subí ese CSV". Subir data pasa a ser arrastrar el archivo
+en la web de GitHub: sin redeploy de la app.
+
+El modo `carpeta` sirve si se monta un disco en Render o si se corre en un
+servidor con una unidad compartida; ahí la fecha es la del archivo.
+
+Con `DATA_ORIGEN=local` (o sin configurar nada) todo sigue funcionando como
+antes, leyendo `projects/<proyecto>/data/`.
+
+## Panel de administración
+
+En `/admin`, visible solo para los correos de `ADMIN_EMAILS`. Responde a:
+
+- **Quiénes entran**: accesos por persona, vistas, actividad reciente y su
+  dashboard preferido.
+- **Qué se ve más**: vistas por dashboard (7 y 30 días), personas únicas,
+  última visita y cuáles no abre nadie.
+- **Qué está activo**: cada dashboard se puede **ocultar** (sigue visible
+  solo para administradores) o **activar**, y se le puede cambiar la
+  **prioridad** con las flechas (manda sobre el `order` del `meta.json`).
+- **Permisos**: dar acceso a un correo nuevo, quitárselo a alguien o
+  restaurarlo, sin redeploy. `ALLOWED_EMAILS` es la semilla; el panel agrega
+  y bloquea encima. Un bloqueo siempre gana.
+- **Frescura de la data**: al día (≤10 días), por vencer (≤30) o
+  desactualizado, con la fecha real de cada archivo.
+
+Ser administrador **solo** se otorga por variable de entorno (`ADMIN_EMAILS`):
+no se puede conceder desde la interfaz, así nadie amplía sus propios permisos.
+
+La analítica (`eventos.json`), los permisos (`accesos.json`) y el estado de
+los dashboards (`dashboards.json`) se guardan en `_plataforma/` dentro del
+origen externo, de modo que sobreviven a los reinicios y redeploys de Render.
+Sin origen externo quedan en `var/`, que es efímero.
+
 ## Agregar un experimento nuevo
 
 1. Copia una carpeta de `projects/` con un nombre nuevo (sin espacios).
@@ -116,6 +202,11 @@ y se incluye desde las vistas con `{% include "_evolucion.html" %}`.
 La lógica de `processor.py` replica la notebook `Puesta_en_Marcha_LTV.ipynb`.
 
 ## Acceso / seguridad
+
+> La lista efectiva de correos con acceso es `ALLOWED_EMAILS` **más** las
+> altas y bajas hechas desde `/admin`. Los administradores se definen solo
+> con `ADMIN_EMAILS`.
+
 
 El acceso es por **código de un solo uso (OTP) al correo corporativo**:
 

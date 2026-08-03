@@ -32,3 +32,22 @@ services:
         sync: false
       - key: SMTP_FROM
         sync: false
+      # Correos con acceso al panel de administración (/admin).
+      - key: ADMIN_EMAILS
+        sync: false
+      # Origen de los datos: local | carpeta | github
+      # Recomendado: github, con un repo privado que tenga una carpeta por
+      # proyecto. Da la fecha real de subida por archivo y evita redeploys.
+      - key: DATA_ORIGEN
+        sync: false
+      - key: DATA_REPO
+        sync: false
+      - key: DATA_TOKEN
+        sync: false
+      - key: DATA_RAMA
+        sync: false
+      - key: DATA_PREFIJO
+        sync: false
+      # Solo para DATA_ORIGEN=carpeta (disco montado o unidad de red).
+      - key: DATA_CARPETA
+        sync: false

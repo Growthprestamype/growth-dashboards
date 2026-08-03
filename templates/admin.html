@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}Administración · Growth Innovation{% endblock %}
+
+{% macro accion(que, slug='', correo='', clase='adm-btn', titulo='', txt='') -%}
+<form class="adm-form" method="post" action="{{ url_for('admin.accion') }}">
+  <input type="hidden" name="accion" value="{{ que }}">
+  <input type="hidden" name="slug" value="{{ slug }}">
+  <input type="hidden" name="correo" value="{{ correo }}">
+  <input type="hidden" name="rango" value="{{ dias }}">
+  <button class="{{ clase }}" type="submit" title="{{ titulo }}">{{ txt }}</button>
+</form>
+{%- endmacro %}
+
+{% block body %}
+<section class="intro">
+  <div class="wrap">
+    <span class="eyebrow">Administración</span>
+    <h1>Quién entra, qué se ve y qué está publicado.</h1>
+  </div>
+</section>
+
+<section class="wrap">
+  {% if mensaje %}<p class="adm-aviso ok">{{ mensaje }}</p>{% endif %}
+  {% if error %}<p class="adm-aviso mal">{{ error }}</p>{% endif %}
+
+  <div class="adm-barra-sup">
+    <div class="switch" role="group" aria-label="Rango de tiempo">
+      <a class="adm-rango {{ 'on' if dias == 7 }}" href="{{ url_for('admin.inicio', rango=7) }}">7 días</a>
+      <a class="adm-rango {{ 'on' if dias == 30 }}" href="{{ url_for('admin.inicio', rango=30) }}">30 días</a>
+    </div>
+    <span class="adm-nota">Actividad registrada desde {{ resumen.desde }} · {{ resumen.total_eventos }} eventos</span>
+  </div>
+
+  <div class="cards adm-kpis">
+    <div class="metric">
+      <span class="adm-k">Accesos</span>
+      <strong class="adm-v">{{ resumen.accesos_periodo }}</strong>
+      <span class="adm-sub">inicios de sesión en {{ dias }} días</span>
+    </div>
+    <div class="metric">
+      <span class="adm-k">Personas activas</span>
+      <strong class="adm-v">{{ resumen.personas_activas }}</strong>
+      <span class="adm-sub">de {{ accesos | length }} con acceso</span>
+    </div>
+    <div class="metric">
+      <span class="adm-k">Vistas de dashboards</span>
+      <strong class="adm-v">{{ resumen.vistas_periodo }}</strong>
+      <span class="adm-sub">{{ sin_visitas }} sin ninguna visita</span>
+    </div>
+    <div class="metric">
+      <span class="adm-k">Más visto</span>
+      <strong class="adm-v chico">{{ top_titulo or '—' }}</strong>
+      <span class="adm-sub">
+        {%- if resumen.top -%}
+          {{ resumen.top.vistas_periodo }} vistas · {{ resumen.top.personas_unicas }} personas
+        {%- else -%}sin datos aún{%- endif -%}
+      </span>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <h2 class="adm-h2">Actividad diaria</h2>
+      <span class="adm-leyenda"><i class="lg-barra"></i> vistas <i class="lg-punto"></i> días con inicio de sesión</span>
+    </div>
+    {{ grafico | safe }}
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <h2 class="adm-h2">Dashboards</h2>
+      <div class="adm-acciones-head">
+        {{ accion('sincronizar', txt='Sincronizar datos', clase='adm-btn fuerte',
+                  titulo='Vuelve a traer los archivos del origen y recalcula') }}
+      </div>
+    </div>
+    <p class="adm-nota bloque">
+      Origen de datos: <strong>{{ origen_desc }}</strong>
+      <span class="adm-flag {{ 'fresco' if origen_ok else 'vencido' }}">{{ origen_detalle }}</span>
+    </p>
+
+    <div class="adm-scroll">
+    <table class="adm-tabla">
+      <thead>
+        <tr>
+          <th>Prioridad</th>
+          <th>Dashboard</th>
+          <th class="num">Vistas {{ dias }}d</th>
+          <th class="num">7d</th>
+          <th class="num">Personas</th>
+          <th>Última visita</th>
+          <th>Datos</th>
+          <th>Estado</th>
+          <th class="der">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in proyectos %}
+        <tr class="{{ 'inactivo' if not p.activo }}">
+          <td class="adm-orden">
+            <span class="adm-pos">{{ loop.index }}</span>
+            <span class="adm-mover">
+              {{ accion('subir', slug=p.slug, clase='adm-mini', titulo='Subir', txt='▲') }}
+              {{ accion('bajar', slug=p.slug, clase='adm-mini', titulo='Bajar', txt='▼') }}
+            </span>
+          </td>
+          <td>
+            <a class="adm-link" href="{{ url_for('project_home', slug=p.slug) }}">{{ p.titulo }}</a>
+            {% if p.tags %}<span class="adm-tags">{{ p.tags | join(' · ') }}</span>{% endif %}
+          </td>
+          <td class="num fuerte">{{ p.vistas_periodo }}</td>
+          <td class="num">{{ p.vistas_7 }}</td>
+          <td class="num">{{ p.personas }}</td>
+          <td class="adm-tenue">{{ p.ultima }}</td>
+          <td>
+            <span class="adm-flag {{ p.frescura }}" title="{% for a in p.archivos %}{{ a.nombre }}: {{ a.fecha }}&#10;{% endfor %}">{{ p.frescura_txt }}</span>
+            <span class="adm-tenue bloque">{{ p.fecha_datos }}</span>
+          </td>
+          <td>
+            {% if p.activo %}<span class="adm-estado on">activo</span>
+            {% else %}<span class="adm-estado off">oculto</span>{% endif %}
+          </td>
+          <td class="der adm-celda-acciones">
+            {% if p.activo %}
+              {{ accion('ocultar', slug=p.slug, txt='Ocultar', titulo='Deja de mostrarse en la portada') }}
+            {% else %}
+              {{ accion('activar', slug=p.slug, clase='adm-btn fuerte', txt='Activar', titulo='Vuelve a publicarse') }}
+            {% endif %}
+            {{ accion('sincronizar', slug=p.slug, txt='Datos', titulo='Sincronizar solo este proyecto') }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <h2 class="adm-h2">Quiénes entran</h2>
+      <span class="adm-nota">Ordenado por actividad más reciente</span>
+    </div>
+    {% if resumen.personas %}
+    <div class="adm-scroll">
+    <table class="adm-tabla">
+      <thead>
+        <tr>
+          <th>Correo</th>
+          <th class="num">Accesos</th>
+          <th class="num">Vistas</th>
+          <th class="num">Eventos {{ dias }}d</th>
+          <th>Dashboard preferido</th>
+          <th>Última actividad</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in resumen.personas %}
+        <tr>
+          <td>{{ u.correo }}{% if u.correo in admins %} <span class="adm-chip">admin</span>{% endif %}</td>
+          <td class="num fuerte">{{ u.accesos }}</td>
+          <td class="num">{{ u.vistas }}</td>
+          <td class="num">{{ u.reciente }}</td>
+          <td class="adm-tenue">{{ titulos.get(u.favorito, u.favorito or '—') }}</td>
+          <td class="adm-tenue">{{ u.ultimo_humano }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="adm-vacio">Todavía no hay actividad registrada. Aparecerá aquí en cuanto alguien inicie sesión.</p>
+    {% endif %}
+  </div>
+
+  <div class="block">
+    <div class="block-head">
+      <h2 class="adm-h2">Accesos y permisos</h2>
+      <span class="adm-nota">Los administradores se definen solo con la variable <code>ADMIN_EMAILS</code></span>
+    </div>
+
+    <form class="adm-alta" method="post" action="{{ url_for('admin.accion') }}">
+      <input type="hidden" name="accion" value="agregar">
+      <input type="hidden" name="rango" value="{{ dias }}">
+      <input class="adm-input" type="email" name="correo" required
+             placeholder="nombre@prestamype.com" aria-label="Correo a autorizar">
+      <button class="adm-btn fuerte" type="submit">Dar acceso</button>
+    </form>
+
+    <div class="adm-scroll">
+    <table class="adm-tabla">
+      <thead>
+        <tr><th>Correo</th><th>Origen</th><th>Estado</th><th class="der">Acciones</th></tr>
+      </thead>
+      <tbody>
+        {% for a in accesos %}
+        <tr class="{{ 'inactivo' if a.bloqueado }}">
+          <td>{{ a.correo }}{% if a.admin %} <span class="adm-chip">admin</span>{% endif %}</td>
+          <td class="adm-tenue">{{ a.origen }}</td>
+          <td>
+            {% if a.bloqueado %}<span class="adm-estado off">sin acceso</span>
+            {% else %}<span class="adm-estado on">con acceso</span>{% endif %}
+          </td>
+          <td class="der adm-celda-acciones">
+            {% if a.bloqueado %}
+              {{ accion('restaurar', correo=a.correo, clase='adm-btn fuerte', txt='Restaurar') }}
+              {% if a.origen == 'panel' %}{{ accion('quitar', correo=a.correo, clase='adm-btn peligro', txt='Eliminar') }}{% endif %}
+            {% elif not a.admin %}
+              {{ accion('bloquear', correo=a.correo, clase='adm-btn peligro', txt='Quitar acceso') }}
+            {% else %}
+              <span class="adm-tenue">protegido</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    {% if registro %}
+    <h3 class="adm-h3">Últimos cambios de permisos</h3>
+    <ul class="adm-registro">
+      {% for r in registro %}
+      <li><strong>{{ r.accion }}</strong> · {{ r.correo }} <span class="adm-tenue">por {{ r.por }}</span></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+
+  <p class="adm-pie">
+    La analítica y los permisos se guardan en
+    {% if origen_externo %}el origen externo, bajo <code>_plataforma/</code>{% else %}<code>var/</code>, que es local y efímero{% endif %}.
+    {{ accion('guardar_analitica', txt='Guardar ahora', clase='adm-btn') }}
+  </p>
+</section>
+{% endblock %}

@@ -8,3 +8,9 @@ env/
 *.ipynb_checkpoints
 .idea/
 .vscode/
+
+# Estado local (analitica, cache de sincronizacion)
+var/
+
+# Marca de fechas que deja la sincronizacion
+projects/*/data/_fechas.json

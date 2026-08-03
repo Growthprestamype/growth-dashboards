@@ -23,13 +23,14 @@
 <section class="wrap">
   <div class="mosaic">
     {% for p in projects %}
-    <a class="tile" href="{{ url_for('project_home', slug=p.slug) }}"
+    <a class="tile {{ 'tile-oculto' if p.slug in ocultos }}" href="{{ url_for('project_home', slug=p.slug) }}"
        data-title="{{ p.title }}" data-tags="{{ p.tags | join('|') }}">
       <div class="tile-cover">
         <img src="{{ url_for('static', filename='covers/' ~ p.dirname ~ '.svg') }}" alt="" loading="lazy">
       </div>
       <div class="tile-body">
         {% if p.tags %}<span class="tile-tag">{{ p.tags | join(' · ') }}</span>{% endif %}
+        {% if p.slug in ocultos %}<span class="tile-oculto-marca">Oculto · solo administradores</span>{% endif %}
         <h2>{{ p.title }}</h2>
         <div class="tile-foot">
           <span class="tile-fecha">{% if fechas.get(p.slug) %}Actualizado · {{ fechas[p.slug] }}{% endif %}</span>
