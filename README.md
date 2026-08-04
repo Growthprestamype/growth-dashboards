@@ -115,7 +115,7 @@ disco. Cada proyecto y cada archivo conserva la suya.
 | `DATA_ORIGEN` | `local` (por defecto), `carpeta`, `dropbox` o `github` |
 | `DATA_CARPETA` | Modo `carpeta`: ruta base (disco persistente de Render, unidad de red, carpeta sincronizada de Drive/OneDrive) |
 | `DROPBOX_APP_KEY` · `DROPBOX_APP_SECRET` · `DROPBOX_REFRESH_TOKEN` | Modo `dropbox` |
-| `DATA_CARPETA_DROPBOX` | Carpeta raíz dentro de Dropbox (por defecto `growth-dashboards`) |
+| `DATA_CARPETA_DROPBOX` | **Dejar sin definir** con acceso *App folder*: la raíz ya es la carpeta de la app. Solo se usa para un nivel intermedio |
 | `DATA_REPO` | Modo `github`: `usuario/growth-data` |
 | `DATA_TOKEN` | Token fino con permiso *Contents: Read and write* sobre ese repo (si no, se usa `GITHUB_TOKEN`) |
 | `DATA_RAMA` | Rama del repo de datos (por defecto `main`) |
@@ -139,22 +139,60 @@ no depender de un tercero (requiere plan de pago en Render).
 ### Configurar Dropbox (una sola vez)
 
 1. Crear una app en https://www.dropbox.com/developers/apps → *Scoped access*
-   → *App folder* (queda aislada en su propia carpeta).
-2. En **Permissions**, marcar `files.content.read` y `files.content.write`;
-   guardar.
+   → *App folder* (queda aislada en su propia carpeta). No hace falta
+   configurar *Redirect URI*: el flujo del paso 4 muestra el código en
+   pantalla.
+2. En la pestaña **Permissions**, marcar estos cuatro permisos y pulsar
+   **Submit** (abajo del todo). Si se omite este paso, el token sale sin
+   permisos y hay que repetir el paso 4 entero:
+   - `account_info.read` — solo para mostrar la cuenta en el panel (opcional)
+   - `files.metadata.read` — listar los archivos de cada carpeta
+   - `files.content.read` — descargar los CSV
+   - `files.content.write` — subir CSV desde el panel
 3. En **Settings**, copiar *App key* y *App secret*.
-4. Obtener un **refresh token** (dura indefinidamente). En el navegador:
-   `https://www.dropbox.com/oauth2/authorize?client_id=APP_KEY&response_type=code&token_access_type=offline`
-   → autorizar → copiar el `code`. Luego, en una terminal:
-   ```bash
-   curl -u APP_KEY:APP_SECRET -d grant_type=authorization_code \
-        -d code=EL_CODE https://api.dropboxapi.com/oauth2/token
+4. Obtener un **refresh token** (dura indefinidamente). Son dos pasos:
+
+   **4.1 · Autorizar en el navegador.** Pega esta dirección reemplazando
+   `TU_APP_KEY` por el App key del paso 3 (nada más: no lleva el secret):
+
    ```
-   El campo `refresh_token` de la respuesta es el valor de
-   `DROPBOX_REFRESH_TOKEN`.
-5. Crear dentro de la carpeta de la app una subcarpeta por proyecto
-   (`fast_track/`, `descuento_en_tasas/`, …) y una `_general/` para la base
-   anual.
+   https://www.dropbox.com/oauth2/authorize?client_id=TU_APP_KEY&response_type=code&token_access_type=offline
+   ```
+
+   Dropbox pedirá permiso ("Allow"). Al aceptar muestra un **código** en
+   pantalla: cópialo. Dura pocos minutos y sirve UNA sola vez; si algo
+   falla, se vuelve a abrir la dirección y se genera otro.
+
+   **4.2 · Canjear el código por el refresh token.** Lo más simple es
+   hacerlo desde la propia plataforma: define primero `DROPBOX_APP_KEY` y
+   `DROPBOX_APP_SECRET` en Render, entra a **/admin → Conectar Dropbox** y
+   sigue los tres pasos: el botón «Autorizar en Dropbox» ya lleva tu App key,
+   y al pegar el código la plataforma devuelve el refresh token listo para
+   copiar. El App secret nunca sale del servidor.
+
+   Si se prefiere hacerlo a mano, con Python (evita los problemas de
+   comillas de curl en Windows):
+
+   ```bash
+   python -c "import urllib.request,urllib.parse,base64,json;k='TU_APP_KEY';s='TU_APP_SECRET';c='EL_CODIGO';d=urllib.parse.urlencode({'grant_type':'authorization_code','code':c}).encode();r=urllib.request.Request('https://api.dropboxapi.com/oauth2/token',data=d,headers={'Authorization':'Basic '+base64.b64encode(f'{k}:{s}'.encode()).decode()});print(json.dumps(json.load(urllib.request.urlopen(r)),indent=2))"
+   ```
+
+   O con curl (en Git Bash funciona igual):
+
+   ```bash
+   curl -u TU_APP_KEY:TU_APP_SECRET \
+        -d grant_type=authorization_code -d code=EL_CODIGO \
+        https://api.dropboxapi.com/oauth2/token
+   ```
+
+   La respuesta trae `access_token` (temporal, se ignora) y
+   **`refresh_token`**: ese es el valor de `DROPBOX_REFRESH_TOKEN`.
+5. Crear las subcarpetas. Con *App folder*, la carpeta aparece en Dropbox
+   como `Aplicaciones/<nombre de la app>` (o `Apps/<nombre>`). Dentro va una
+   subcarpeta por proyecto —`fast_track/`, `descuento_en_tasas/`,
+   `extension_de_plazos/`, `puesta_en_marcha_ltv/`— y una `_general/` con
+   `Data_anual.csv`. El nombre de cada carpeta debe ser **idéntico al slug**
+   del proyecto (el nombre de su carpeta en `projects/`).
 
 ### Subir datos desde el panel
 
@@ -181,7 +219,14 @@ derecha** para no cruzarse con la del eje izquierdo:
   la propia serie principal, etiquetada con su valor.
 
 La **tuerca** junto al título de la gráfica permite encender y apagar cada
-capa; la elección se recuerda en el navegador. Si un mes no existe en la base
+capa; la elección se recuerda en el navegador. El **embudo**, a su lado,
+filtra la data histórica del negocio por **Canal** (Digital / Presencial),
+**Moneda** (PEN / USD) y **Esquema** (Cuota Fija, Crédito Puente, …): así se
+compara el experimento contra el segmento equivalente y no contra todo el
+negocio. Los filtros viajan en la URL (`?canal=Digital&esquema=Cuota+Fija`),
+de modo que una vista filtrada se puede compartir tal cual; el embudo se
+marca en verde cuando hay algún filtro activo y «Limpiar» los quita. Cada
+combinación se cachea por separado. Si un mes no existe en la base
 anual (por ejemplo, las vistas de proyección con data de 2025), la capa
 simplemente no se dibuja.
 

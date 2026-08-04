@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Conectar Dropbox · Growth Innovation{% endblock %}
+{% block body %}
+<section class="intro">
+  <div class="wrap">
+    <span class="eyebrow">Administración · Datos</span>
+    <h1>Conectar Dropbox</h1>
+    <p class="dbx-sub">Tres pasos, sin abrir una terminal. El App secret nunca
+      sale del servidor: el canje lo hace la propia plataforma.</p>
+  </div>
+</section>
+
+<section class="wrap">
+  {% if mensaje %}<p class="adm-aviso ok">{{ mensaje }}</p>{% endif %}
+  {% if error %}<p class="adm-aviso mal">{{ error }}</p>{% endif %}
+
+  {% if resultado %}
+  <div class="block dbx-token">
+    <h2 class="adm-h2">Tu refresh token</h2>
+    <p class="adm-nota bloque">Cópialo y pégalo en Render →
+      <strong>Environment</strong> → <code>DROPBOX_REFRESH_TOKEN</code>.
+      Se muestra una sola vez; si lo pierdes, repites el paso 2.</p>
+    <textarea class="dbx-out" rows="3" readonly onclick="this.select()">{{ resultado.refresh_token }}</textarea>
+    <p class="adm-nota bloque">Permisos incluidos:
+      {% for s in resultado.scopes %}<span class="adm-flag fresco">{{ s }}</span> {% endfor %}
+      {% if not resultado.scopes %}<span class="adm-flag vencido">ninguno</span>{% endif %}
+    </p>
+  </div>
+  {% endif %}
+
+  <div class="block">
+    <h2 class="adm-h2">Paso 1 · Permisos de la app</h2>
+    <p class="adm-nota bloque">
+      En <a class="adm-link" href="https://www.dropbox.com/developers/apps" target="_blank" rel="noopener">tu app de Dropbox</a>,
+      pestaña <strong>Permissions</strong>: marca estos cuatro y pulsa <strong>Submit</strong>.
+      Hazlo <em>antes</em> del paso 2: el token hereda los permisos del momento en que autorizas.
+    </p>
+    <p>{% for s in scopes %}<span class="adm-flag">{{ s }}</span> {% endfor %}</p>
+  </div>
+
+  <div class="block">
+    <h2 class="adm-h2">Paso 2 · Autorizar</h2>
+    {% if hay_app %}
+    <p class="adm-nota bloque">Se abre Dropbox, pulsas <strong>Allow</strong> y
+      te muestra un código. Cópialo y pégalo aquí abajo (vence en pocos minutos
+      y sirve una sola vez).</p>
+    <p><a class="adm-btn fuerte" href="{{ url_auth }}" target="_blank" rel="noopener">Autorizar en Dropbox →</a></p>
+    {% else %}
+    <p class="adm-vacio">Primero define <code>DROPBOX_APP_KEY</code> y
+      <code>DROPBOX_APP_SECRET</code> en Render (pestaña Settings de tu app de
+      Dropbox) y reinicia el servicio.</p>
+    {% endif %}
+  </div>
+
+  <div class="block">
+    <h2 class="adm-h2">Paso 3 · Canjear el código</h2>
+    <form class="dbx-form" method="post">
+      <input class="adm-input" type="text" name="codigo" required
+             placeholder="Pega aquí el código de Dropbox"
+             aria-label="Código de autorización" {{ 'disabled' if not hay_app }}>
+      <button class="adm-btn fuerte" type="submit" {{ 'disabled' if not hay_app }}>Generar refresh token</button>
+    </form>
+    <p class="adm-nota bloque">Después de pegar el token en Render, el servicio
+      se reinicia solo y la conexión queda lista.</p>
+  </div>
+
+  <p class="adm-pie">
+    Estado actual: <span class="adm-flag {{ 'fresco' if origen_ok and modo == 'dropbox' else 'sin-datos' }}">{{ origen_detalle }}</span>
+    <a class="adm-btn" href="{{ url_for('admin.inicio') }}">← Volver al panel</a>
+  </p>
+</section>
+{% endblock %}

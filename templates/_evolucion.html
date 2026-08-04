@@ -7,7 +7,39 @@
     {% if evol.nota_capas %}<span class="desc-capas">{{ evol.nota_capas }}</span>{% endif %}
   </p>
 
-  <div class="chart-title">{{ evol.vol_title or 'Volumen desembolsado por mes' }} <span>({{ evol.vol_unit or 'soles' }})</span></div>
+  <div class="chart-title">{{ evol.vol_title or 'Volumen desembolsado por mes' }} <span>({{ evol.vol_unit or 'soles' }})</span>
+    {% if filtros_opciones %}
+    <span class="embudo">
+      <button class="embudo-btn {{ 'activo' if filtros }}" type="button"
+              aria-label="Filtros de la data histórica"
+              title="Filtrar la data histórica del negocio">
+        <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+          <path fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linejoin="round" d="M3.5 5h17l-6.6 7.8v5.4l-3.8 2v-7.4z"/>
+        </svg>
+        {% if filtros %}<i class="embudo-punto"></i>{% endif %}
+      </button>
+      <form class="embudo-menu" method="get" hidden>
+        <div class="embudo-tit">Data histórica del negocio</div>
+        {% for dim in filtros_opciones %}
+        <label class="embudo-fila">
+          <span>{{ dim.etiqueta }}</span>
+          <select name="{{ dim.clave }}">
+            <option value="">Todos</option>
+            {% for v in dim.valores %}
+            <option value="{{ v }}" {{ 'selected' if filtros.get(dim.clave) == v }}>{{ v }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {% endfor %}
+        <div class="embudo-pie">
+          <button class="embudo-aplicar" type="submit">Aplicar</button>
+          <a class="embudo-limpiar" href="{{ url_for('project_view', slug=project.slug, view=current_view) }}">Limpiar</a>
+        </div>
+      </form>
+    </span>
+    {% endif %}
+  </div>
   <div class="chart">{{ evol.vol_chart | safe }}</div>
 
   <div class="series">

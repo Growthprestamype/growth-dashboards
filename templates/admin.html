@@ -70,6 +70,7 @@
     <div class="block-head">
       <h2 class="adm-h2">Dashboards</h2>
       <div class="adm-acciones-head">
+        <a class="adm-btn" href="{{ url_for('admin.dropbox') }}">Conectar Dropbox</a>
         {{ accion('sincronizar', txt='Sincronizar datos', clase='adm-btn fuerte',
                   titulo='Vuelve a traer los archivos del origen y recalcula') }}
       </div>

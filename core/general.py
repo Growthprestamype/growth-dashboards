@@ -19,6 +19,7 @@ existe, las capas simplemente no aparecen: ningun dashboard se rompe.
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from pathlib import Path
 
 import pandas as pd
@@ -37,7 +38,20 @@ COLS_MONTO = ["Monto Desembolsado Solarizado", "Monto Solarizado", "Monto"]
 COL_CERRADO = "Flag Contrato Cerrado"
 COL_CONTRATO = "Codigo de Contrato"
 
-_cache: dict | None = None
+COL_CANAL = "Canal"
+COL_MONEDA = "Moneda"
+COL_ESQUEMA = "Esquema"
+DIMENSIONES = [
+    ("canal", COL_CANAL, "Canal"),
+    ("moneda", COL_MONEDA, "Moneda"),
+    ("esquema", COL_ESQUEMA, "Esquema"),
+]
+
+# Los filtros del embudo viajan por contexto de request: los procesadores
+# llaman a capas_para(periodos) sin saber nada de ellos.
+_filtros: ContextVar[dict] = ContextVar("filtros_general", default={})
+
+_cache: dict = {}
 _cache_firma = None
 
 
@@ -77,20 +91,65 @@ def _leer() -> pd.DataFrame | None:
     return df
 
 
-def serie_mensual() -> dict[int, dict]:
-    """{202601: {casos, monto, ticket}} del negocio general."""
+def filtros_actuales() -> dict:
+    return dict(_filtros.get() or {})
+
+
+def fijar_filtros(valores: dict | None):
+    """Deja activos los filtros del embudo para este request."""
+    limpio = {k: v for k, v in (valores or {}).items()
+              if v and str(v).lower() not in ("", "todos", "todas")}
+    _filtros.set(limpio)
+    return limpio
+
+
+def clave_filtros(valores: dict | None = None) -> str:
+    """Firma corta para usar como parte de la clave de caché."""
+    v = valores if valores is not None else filtros_actuales()
+    return "|".join(f"{k}={v[k]}" for k in sorted(v)) or "todo"
+
+
+def opciones() -> list[dict]:
+    """Valores disponibles por dimensión, para armar el embudo."""
+    df = _leer()
+    salida = []
+    for clave, col, etiqueta in DIMENSIONES:
+        vals = []
+        if df is not None and col in df.columns:
+            vals = sorted({str(x).strip() for x in df[col].dropna().unique()
+                           if str(x).strip()})
+        salida.append({"clave": clave, "etiqueta": etiqueta, "valores": vals})
+    return salida
+
+
+def _filtrar(df, valores: dict):
+    for clave, col, _ in DIMENSIONES:
+        elegido = valores.get(clave)
+        if elegido and col in df.columns:
+            df = df[df[col].astype(str).str.strip().str.lower()
+                    == str(elegido).strip().lower()]
+    return df
+
+
+def serie_mensual(valores: dict | None = None) -> dict[int, dict]:
+    """{202601: {casos, monto, ticket}} del negocio general, ya filtrado."""
     global _cache, _cache_firma
     p = ruta()
     if not p.exists():
         return {}
     firma = (p.stat().st_mtime_ns, p.stat().st_size)
-    if _cache is not None and _cache_firma == firma:
-        return _cache
+    if _cache_firma != firma:
+        _cache, _cache_firma = {}, firma
+    activos = valores if valores is not None else filtros_actuales()
+    ck = clave_filtros(activos)
+    if ck in _cache:
+        return _cache[ck]
 
     df = _leer()
     if df is None or COL_PERIODO not in df.columns:
-        _cache, _cache_firma = {}, firma
+        _cache[ck] = {}
         return {}
+    df = _filtrar(df, activos)
 
     col_monto = next((c for c in COLS_MONTO if c in df.columns), None)
 
@@ -114,8 +173,14 @@ def serie_mensual() -> dict[int, dict]:
             "monto": monto,
             "ticket": (monto / casos) if casos else 0.0,
         }
-    _cache, _cache_firma = salida, firma
+    _cache[ck] = salida
     return salida
+
+
+def _sufijo_filtros() -> str:
+    v = filtros_actuales()
+    partes = [v[k] for k, _, _ in DIMENSIONES if v.get(k)]
+    return f" · {' · '.join(partes)}" if partes else ""
 
 
 def capas_para(periodos) -> dict | None:
@@ -139,10 +204,13 @@ def capas_para(periodos) -> dict | None:
     if not any(c is not None for c in casos):
         return None
 
+    suf = _sufijo_filtros()
     return {
-        "fondo": {"clave": "fondo", "nombre": "Negocio general (casos)",
+        "fondo": {"clave": "fondo",
+                  "nombre": f"Negocio general (casos){suf}",
                   "valores": casos, "unidad": "casos"},
-        "marca": {"clave": "marca", "nombre": "Ticket promedio del mes",
+        "marca": {"clave": "marca",
+                  "nombre": f"Ticket promedio del mes{suf}",
                   "valores": tickets, "unidad": "soles"},
         "base": {"clave": "base", "nombre": "Línea base (promedio)"},
     }

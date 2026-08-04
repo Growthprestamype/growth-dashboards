@@ -99,3 +99,20 @@
     document.querySelectorAll(".chart").forEach(montar);
   });
 })();
+
+/* El embudo: despliega el menú de filtros de la data histórica. */
+(function () {
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".embudo").forEach(function (caja) {
+      var btn = caja.querySelector(".embudo-btn");
+      var menu = caja.querySelector(".embudo-menu");
+      if (!btn || !menu) return;
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        menu.hidden = !menu.hidden;
+      });
+      menu.addEventListener("click", function (ev) { ev.stopPropagation(); });
+      document.addEventListener("click", function () { menu.hidden = true; });
+    });
+  });
+})();

@@ -206,6 +206,40 @@ def accion():
     return redirect(url_for("admin.inicio", rango=rango, m=mensaje, e=error))
 
 
+SCOPES_NECESARIOS = ["account_info.read", "files.content.read",
+                     "files.content.write", "files.metadata.read"]
+
+
+@admin_bp.route("/dropbox", methods=["GET", "POST"])
+def dropbox():
+    """Asistente para conectar Dropbox sin abrir una terminal."""
+    hay_app, hay_token = origen.dbx_configurado()
+    resultado = mensaje = error = None
+    if request.method == "POST":
+        ok, msg, datos_tok = origen.dbx_canjear(request.form.get("codigo"))
+        if ok:
+            resultado = datos_tok
+            faltan = [s for s in SCOPES_NECESARIOS
+                      if s not in datos_tok["scopes"]]
+            mensaje = ("Token generado. Cópialo en Render como "
+                       "DROPBOX_REFRESH_TOKEN.")
+            if faltan:
+                error = ("Ojo: al token le faltan permisos ("
+                         + ", ".join(faltan) + "). Márcalos en Permissions, "
+                         "pulsa Submit y repite la autorización.")
+        else:
+            error = msg
+    ok_origen, detalle_origen = origen.probar()
+    return render_template(
+        "dropbox.html",
+        hay_app=hay_app, hay_token=hay_token,
+        url_auth=origen.dbx_url_autorizacion() if hay_app else None,
+        scopes=SCOPES_NECESARIOS,
+        resultado=resultado, mensaje=mensaje, error=error,
+        modo=origen.modo(), origen_ok=ok_origen, origen_detalle=detalle_origen,
+    )
+
+
 @admin_bp.route("/subir", methods=["POST"])
 def subir():
     """Sube un CSV al origen y recalcula el dashboard afectado."""

@@ -74,8 +74,16 @@ def modo() -> str:
 
 
 def _dbx_raiz() -> str:
-    return "/" + (os.environ.get("DATA_CARPETA_DROPBOX")
-                  or "growth-dashboards").strip("/")
+    """Carpeta base dentro de Dropbox.
+
+    Con acceso *App folder* la raiz de la API YA ES la carpeta de la app
+    (Aplicaciones/<nombre>), asi que lo normal es dejar esto vacio: las
+    carpetas de proyecto cuelgan directo de ahi. Solo se define
+    DATA_CARPETA_DROPBOX si se quiere un nivel intermedio, o si la app usa
+    acceso *Full Dropbox* y hay que apuntar a una carpeta concreta.
+    """
+    sub = (os.environ.get("DATA_CARPETA_DROPBOX") or "").strip().strip("/")
+    return f"/{sub}" if sub else ""
 
 
 def _token() -> str:
@@ -115,7 +123,7 @@ def descripcion() -> str:
     if m == "carpeta":
         return f"Carpeta externa · {_carpeta()}"
     if m == "dropbox":
-        return f"Dropbox · {_dbx_raiz()}"
+        return f"Dropbox · {_dbx_raiz() or 'carpeta de la app'}"
     if m == "github":
         pre = f"/{_prefijo()}" if _prefijo() else ""
         return f"Repositorio · {_repo()}{pre} ({_rama()})"
@@ -386,6 +394,69 @@ def guardar_estado(nombre: str, obj) -> bool:
     return True
 
 
+def dbx_configurado() -> tuple[bool, bool]:
+    """(hay app key y secret, hay refresh token)."""
+    return (bool(os.environ.get("DROPBOX_APP_KEY")
+                 and os.environ.get("DROPBOX_APP_SECRET")),
+            bool(os.environ.get("DROPBOX_REFRESH_TOKEN")))
+
+
+def dbx_url_autorizacion() -> str:
+    """Enlace de autorizacion de Dropbox, ya armado con el App key."""
+    clave = (os.environ.get("DROPBOX_APP_KEY") or "").strip()
+    return ("https://www.dropbox.com/oauth2/authorize?"
+            + urllib.parse.urlencode({
+                "client_id": clave,
+                "response_type": "code",
+                "token_access_type": "offline",
+            }))
+
+
+def dbx_canjear(codigo: str) -> tuple[bool, str, dict]:
+    """Cambia el codigo de autorizacion por un refresh token permanente.
+
+    Evita que haya que abrir una terminal: el App secret nunca sale del
+    servidor y el token se muestra una sola vez para copiarlo a Render.
+    """
+    codigo = (codigo or "").strip()
+    if not codigo:
+        return False, "Pega el código que te dio Dropbox.", {}
+    clave = (os.environ.get("DROPBOX_APP_KEY") or "").strip()
+    secreto = (os.environ.get("DROPBOX_APP_SECRET") or "").strip()
+    if not (clave and secreto):
+        return False, ("Faltan DROPBOX_APP_KEY y DROPBOX_APP_SECRET en las "
+                       "variables de entorno."), {}
+
+    datos = urllib.parse.urlencode({"grant_type": "authorization_code",
+                                    "code": codigo}).encode()
+    basic = base64.b64encode(f"{clave}:{secreto}".encode()).decode()
+    req = urllib.request.Request(
+        "https://api.dropboxapi.com/oauth2/token", data=datos, method="POST",
+        headers={"Authorization": "Basic " + basic,
+                 "Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            js = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        detalle = e.read().decode("utf-8", "ignore")[:200]
+        if "invalid_grant" in detalle:
+            return False, ("El código ya venció o se usó. Vuelve a pulsar "
+                           "«Autorizar en Dropbox» y pega uno nuevo."), {}
+        return False, f"Dropbox respondió {e.code}: {detalle}", {}
+    except Exception as e:
+        return False, f"No se pudo contactar a Dropbox: {e}", {}
+
+    refresh = js.get("refresh_token")
+    if not refresh:
+        return False, ("Dropbox no devolvió refresh_token. Asegúrate de "
+                       "usar el enlace de esta página (lleva "
+                       "token_access_type=offline)."), {}
+    return True, "Token generado.", {
+        "refresh_token": refresh,
+        "scopes": sorted((js.get("scope") or "").split()),
+    }
+
+
 def subir(carpeta: str, nombre: str, contenido: bytes) -> tuple[bool, str]:
     """Guarda un archivo en el origen, dentro de la carpeta del proyecto.
 
@@ -423,16 +494,44 @@ def probar() -> tuple[bool, str]:
                  and not d.name.startswith("_")])
         return True, f"Conectado · {n} carpeta(s) de proyecto en {base}."
     if m == "dropbox":
+        # Lo que de verdad importa es poder listar la carpeta. El dato de
+        # la cuenta es un extra: si falta el permiso account_info.read, no
+        # se considera un fallo.
         try:
-            cuenta = _dbx_rpc("users/get_current_account", None)
-            uso = _dbx_rpc("users/get_space_usage", None)
-            gb = uso.get("allocation", {}).get("allocated", 0) / 1e9
-            usado = uso.get("used", 0) / 1e9
-            return True, (f"Conectado como {cuenta.get('email', '—')} · "
-                          f"{usado:.1f} de {gb:.0f} GB usados · "
-                          f"carpeta {_dbx_raiz()}")
+            js = _dbx_rpc("files/list_folder", {"path": _dbx_raiz()})
+        except urllib.error.HTTPError as e:
+            detalle = e.read().decode("utf-8", "ignore")[:160]
+            if e.code == 401:
+                return False, ("Dropbox rechazó las credenciales (401): "
+                               "revisa el refresh token, el App key y el "
+                               "App secret.")
+            if "missing_scope" in detalle:
+                return False, ("Falta un permiso en la app de Dropbox. En "
+                               "Permissions marca files.metadata.read, "
+                               "files.content.read y files.content.write, "
+                               "pulsa Submit y vuelve a generar el token.")
+            if "not_found" in detalle:
+                return False, (f"La carpeta {_dbx_raiz()} no existe en "
+                               "Dropbox: revisa DATA_CARPETA_DROPBOX o "
+                               "déjala sin definir.")
+            return False, f"Dropbox respondió {e.code}: {detalle}"
         except Exception as e:
             return False, f"No se pudo conectar a Dropbox: {e}"
+
+        carpetas = [it["name"] for it in js.get("entries", [])
+                    if it.get(".tag") == "folder"]
+        try:
+            cuenta = _dbx_rpc("users/get_current_account", None)
+            quien = cuenta.get("email", "")
+        except Exception:
+            quien = ""
+        detalle = (f"Conectado · {len(carpetas)} carpeta(s) en "
+                   f"{_dbx_raiz() or 'la carpeta de la app'}")
+        if carpetas:
+            detalle += " (" + ", ".join(sorted(carpetas)[:5]) + ")"
+        if quien:
+            detalle += f" · {quien}"
+        return True, detalle
     try:
         js = _api("GET", f"{API}/repos/{_repo()}")
         priv = "privado" if js.get("private") else "publico"

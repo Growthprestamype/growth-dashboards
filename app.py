@@ -65,7 +65,8 @@ def invalidar_cache(slug=None):
     """Olvida los resultados calculados para que se recalculen con la
     data recién sincronizada."""
     if slug:
-        _DATA_CACHE.pop(slug, None)
+        for clave in [k for k in _DATA_CACHE if k[0] == slug]:
+            _DATA_CACHE.pop(clave, None)
     else:
         _DATA_CACHE.clear()
 
@@ -74,9 +75,12 @@ def get_project_data(project, refresh=False):
     # Trae la data del origen externo si toca (TTL interno de core.datos).
     general.asegurar()
     datos.asegurar(project.slug, project.path / "data")
-    if refresh or project.slug not in _DATA_CACHE:
-        _DATA_CACHE[project.slug] = project.build()
-    return _DATA_CACHE[project.slug]
+    # La caché distingue por combinación de filtros del embudo: cada una
+    # produce capas de contexto distintas.
+    clave = (project.slug, general.clave_filtros())
+    if refresh or clave not in _DATA_CACHE:
+        _DATA_CACHE[clave] = project.build()
+    return _DATA_CACHE[clave]
 
 
 def es_admin() -> bool:
@@ -142,6 +146,9 @@ def project_view(slug, view):
     if not panel.activo(slug) and not es_admin():
         abort(404)
 
+    filtros = general.fijar_filtros(
+        {clave: request.args.get(clave) for clave, _, _ in general.DIMENSIONES}
+    )
     refresh = request.args.get("refresh") == "1"
     data = get_project_data(project, refresh=refresh)
     context = data.get(view, {})
@@ -161,6 +168,8 @@ def project_view(slug, view):
         current_view=view,
         notas_tpl=notas_tpl,
         oculto=not panel.activo(slug),
+        filtros=filtros,
+        filtros_opciones=general.opciones() if general.disponible() else [],
         **context,
     )
 
