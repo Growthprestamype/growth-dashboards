@@ -112,24 +112,82 @@ disco. Cada proyecto y cada archivo conserva la suya.
 
 | Variable | Para qué |
 |---|---|
-| `DATA_ORIGEN` | `local` (por defecto), `carpeta` o `github` |
-| `DATA_CARPETA` | Modo `carpeta`: ruta base (disco montado, unidad de red, carpeta sincronizada de Drive/OneDrive) |
+| `DATA_ORIGEN` | `local` (por defecto), `carpeta`, `dropbox` o `github` |
+| `DATA_CARPETA` | Modo `carpeta`: ruta base (disco persistente de Render, unidad de red, carpeta sincronizada de Drive/OneDrive) |
+| `DROPBOX_APP_KEY` · `DROPBOX_APP_SECRET` · `DROPBOX_REFRESH_TOKEN` | Modo `dropbox` |
+| `DATA_CARPETA_DROPBOX` | Carpeta raíz dentro de Dropbox (por defecto `growth-dashboards`) |
 | `DATA_REPO` | Modo `github`: `usuario/growth-data` |
 | `DATA_TOKEN` | Token fino con permiso *Contents: Read and write* sobre ese repo (si no, se usa `GITHUB_TOKEN`) |
 | `DATA_RAMA` | Rama del repo de datos (por defecto `main`) |
 | `DATA_PREFIJO` | Subcarpeta base dentro del repo, opcional |
 
-**Recomendado en Render: modo `github`** con un repositorio privado solo para
-datos. Es gratis, no necesita disco de pago, queda versionado y —lo
-importante— la API de commits da la fecha real *por archivo*, que es
-exactamente "cuándo subí ese CSV". Subir data pasa a ser arrastrar el archivo
-en la web de GitHub: sin redeploy de la app.
+### Cuál elegir
 
-El modo `carpeta` sirve si se monta un disco en Render o si se corre en un
-servidor con una unidad compartida; ahí la fecha es la del archivo.
+| Modo | Cómo se actualiza la data | Costo | Notas |
+|---|---|---|---|
+| **`dropbox`** | Arrastras el CSV a la carpeta de Dropbox (escritorio, web o celular) **o** lo subes desde el panel | Gratis (2 GB) | La opción más cómoda para el equipo. Dropbox guarda la fecha real de subida por archivo |
+| **`carpeta`** | Disco persistente de Render; se sube desde el panel | ~US$ 7/mes de instancia + US$ 0.25/GB | Todo dentro de Render, sin terceros. El disco obliga a una sola instancia |
+| **`github`** | Commit en un repo privado de datos | Gratis | Versionado completo, pero maneja CSV como código |
+| `local` | Va en el propio repo de la app | Gratis | Comportamiento histórico: **no distingue fechas por archivo** en Render |
+
+**Recomendación: `dropbox`.** Cumple lo que se busca —una carpeta persistente
+de la que la web jala directo— sin pagar disco ni tratar los CSV como código.
+Se sincroniza desde el escritorio, así que actualizar un dashboard es guardar
+el archivo en su carpeta. El modo `carpeta` es la alternativa si se prefiere
+no depender de un tercero (requiere plan de pago en Render).
+
+### Configurar Dropbox (una sola vez)
+
+1. Crear una app en https://www.dropbox.com/developers/apps → *Scoped access*
+   → *App folder* (queda aislada en su propia carpeta).
+2. En **Permissions**, marcar `files.content.read` y `files.content.write`;
+   guardar.
+3. En **Settings**, copiar *App key* y *App secret*.
+4. Obtener un **refresh token** (dura indefinidamente). En el navegador:
+   `https://www.dropbox.com/oauth2/authorize?client_id=APP_KEY&response_type=code&token_access_type=offline`
+   → autorizar → copiar el `code`. Luego, en una terminal:
+   ```bash
+   curl -u APP_KEY:APP_SECRET -d grant_type=authorization_code \
+        -d code=EL_CODE https://api.dropboxapi.com/oauth2/token
+   ```
+   El campo `refresh_token` de la respuesta es el valor de
+   `DROPBOX_REFRESH_TOKEN`.
+5. Crear dentro de la carpeta de la app una subcarpeta por proyecto
+   (`fast_track/`, `descuento_en_tasas/`, …) y una `_general/` para la base
+   anual.
+
+### Subir datos desde el panel
+
+Con `dropbox` o `carpeta`, el panel de administración incluye **Actualizar
+datos**: se elige el dashboard, se suelta el CSV y la app lo guarda en el
+origen, resincroniza y recalcula. La fecha de la tarjeta pasa a ser la de esa
+subida. No hace falta redeploy ni tocar el repositorio.
 
 Con `DATA_ORIGEN=local` (o sin configurar nada) todo sigue funcionando como
 antes, leyendo `projects/<proyecto>/data/`.
+
+## Capas de contexto en las gráficas (la tuerca)
+
+Si existe una base anual del negocio (`_general/Data_anual.csv`), las gráficas
+de evolución suman tres capas opcionales, cada una con **su propia escala a la
+derecha** para no cruzarse con la del eje izquierdo:
+
+- **Negocio general (casos)**: barras tenues detrás de la serie principal, con
+  los casos cerrados de todo el negocio ese mes. Sirve para ver si un mes
+  bueno del experimento fue un mes bueno del negocio.
+- **Ticket promedio del mes**: marca horizontal sobre las barras (eje derecho
+  en soles).
+- **Línea base (promedio)**: línea discontinua con el promedio del período de
+  la propia serie principal, etiquetada con su valor.
+
+La **tuerca** junto al título de la gráfica permite encender y apagar cada
+capa; la elección se recuerda en el navegador. Si un mes no existe en la base
+anual (por ejemplo, las vistas de proyección con data de 2025), la capa
+simplemente no se dibuja.
+
+La base anual se sube como cualquier otro archivo desde el panel, eligiendo
+**Base anual · negocio general**. Columnas que usa: `Periodo de Cierre`
+(YYYYMM), `Monto Desembolsado Solarizado` y `Flag Contrato Cerrado`.
 
 ## Panel de administración
 
@@ -147,6 +205,8 @@ En `/admin`, visible solo para los correos de `ADMIN_EMAILS`. Responde a:
   y bloquea encima. Un bloqueo siempre gana.
 - **Frescura de la data**: al día (≤10 días), por vencer (≤30) o
   desactualizado, con la fecha real de cada archivo.
+- **Actualizar datos**: subir el CSV de un dashboard (o la base anual) al
+  origen y recalcular en el momento, sin redeploy.
 
 Ser administrador **solo** se otorga por variable de entorno (`ADMIN_EMAILS`):
 no se puede conceder desde la interfaz, así nadie amplía sus propios permisos.

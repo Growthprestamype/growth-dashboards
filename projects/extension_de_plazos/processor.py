@@ -31,6 +31,7 @@ import pandas as pd
 # permitir importar core.charts tanto en local como en Render
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from core.fechas import fecha_subida  # noqa: E402
+from core.general import capas_para  # noqa: E402
 from core.charts import bar_chart, increment_bars, line_chart  # noqa: E402
 
 warnings.filterwarnings("ignore")
@@ -139,6 +140,7 @@ def _bloque_evolucion(rows):
         "rango": rango,
         "vol_chart": bar_chart(
             vol_points,
+            capas=capas_para([r["per"] for r in rows]),
             y_fmt=lambda v: f"{v / 1e6:.1f}M",
             tip_fmt=lambda v: soles(v),
         ),

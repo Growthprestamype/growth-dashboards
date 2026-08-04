@@ -1,0 +1,18 @@
+{
+  "slug": "proyecto_demo",
+  "title": "Proyecto demo (plantilla)",
+  "tags": [
+    "Incremento de Cartera"
+  ],
+  "order": 9,
+  "views": [
+    {
+      "slug": "proyeccion",
+      "label": "Proyección"
+    },
+    {
+      "slug": "seguimiento",
+      "label": "Seguimiento"
+    }
+  ]
+}

@@ -3,7 +3,9 @@
     <h3>Evolución mensual</h3>
     <span class="evol-range">{{ evol.rango }}</span>
   </div>
-  <p class="desc">Casos agrupados por período de cierre.</p>
+  <p class="desc">Casos agrupados por período de cierre.
+    {% if evol.nota_capas %}<span class="desc-capas">{{ evol.nota_capas }}</span>{% endif %}
+  </p>
 
   <div class="chart-title">{{ evol.vol_title or 'Volumen desembolsado por mes' }} <span>({{ evol.vol_unit or 'soles' }})</span></div>
   <div class="chart">{{ evol.vol_chart | safe }}</div>

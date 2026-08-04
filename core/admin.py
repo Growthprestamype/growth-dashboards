@@ -13,13 +13,14 @@ Responde a cuatro preguntas:
 
 from __future__ import annotations
 
+import os
 import time
 from html import escape
 
 from flask import (Blueprint, redirect, render_template, request, session,
                    url_for)
 
-from core import analitica, datos, fechas, origen, panel
+from core import analitica, datos, fechas, general, origen, panel
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -146,6 +147,10 @@ def inicio():
         origen_ok=ok_origen,
         origen_detalle=detalle_origen,
         origen_externo=origen.externo(),
+        admite_subida=origen.admite_subida(),
+        general_ok=general.disponible(),
+        general_fecha=general.fecha(),
+        general_meses=len(general.serie_mensual()),
         mensaje=request.args.get("m"),
         error=request.args.get("e"),
     )
@@ -197,6 +202,47 @@ def accion():
                    else "No se pudo guardar en el origen; queda en local.")
     else:
         error = "Acción no reconocida."
+
+    return redirect(url_for("admin.inicio", rango=rango, m=mensaje, e=error))
+
+
+@admin_bp.route("/subir", methods=["POST"])
+def subir():
+    """Sube un CSV al origen y recalcula el dashboard afectado."""
+    rango = request.form.get("rango", "30")
+    destino = (request.form.get("destino") or "").strip()
+    archivo = request.files.get("archivo")
+    mensaje = error = None
+
+    if not origen.admite_subida():
+        error = ("Este origen no admite subidas. Usa DATA_ORIGEN=carpeta "
+                 "(disco persistente) o dropbox.")
+    elif not archivo or not archivo.filename:
+        error = "Elige un archivo."
+    elif not archivo.filename.lower().endswith((".csv", ".xls", ".xlsx")):
+        error = "Solo se aceptan archivos .csv, .xls o .xlsx."
+    elif not destino:
+        error = "Elige a qué dashboard pertenece el archivo."
+    else:
+        nombre = os.path.basename(archivo.filename).replace("\\", "/").split("/")[-1]
+        ok, detalle = origen.subir(destino, nombre, archivo.read())
+        if not ok:
+            error = detalle
+        else:
+            if destino == general.CARPETA_ORIGEN:
+                inf = general.sincronizar(forzar=True)
+            else:
+                registro = _get_registry()
+                proyecto = registro.get(destino)
+                inf = (datos.sincronizar(destino, proyecto.path / "data",
+                                         forzar=True)
+                       if proyecto else {"ok": False, "error": "proyecto"})
+            if _invalidar:
+                _invalidar()
+            fecha_txt = fechas.formatear(int(time.time()))
+            mensaje = (f"{detalle} Fecha de actualización: {fecha_txt}."
+                       if inf.get("ok") else
+                       f"{detalle} Aviso al sincronizar: {inf.get('error')}")
 
     return redirect(url_for("admin.inicio", rango=rango, m=mensaje, e=error))
 

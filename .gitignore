@@ -14,3 +14,6 @@ var/
 
 # Marca de fechas que deja la sincronizacion
 projects/*/data/_fechas.json
+
+# La base anual se sincroniza desde el origen (_general/)
+datos_general/_fechas.json

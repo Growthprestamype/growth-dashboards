@@ -17,7 +17,7 @@ from flask import (Flask, abort, redirect, render_template, request, session,
                    url_for)
 from jinja2 import ChoiceLoader, FileSystemLoader
 
-from core import analitica, datos, panel
+from core import analitica, datos, general, panel
 from core.admin import init_admin
 from core.auth import init_auth
 from core.fechas import fecha_subida_dir
@@ -72,6 +72,7 @@ def invalidar_cache(slug=None):
 
 def get_project_data(project, refresh=False):
     # Trae la data del origen externo si toca (TTL interno de core.datos).
+    general.asegurar()
     datos.asegurar(project.slug, project.path / "data")
     if refresh or project.slug not in _DATA_CACHE:
         _DATA_CACHE[project.slug] = project.build()
@@ -114,6 +115,7 @@ def index():
         kpis = json.loads(tags_path.read_text(encoding="utf-8")).get("kpis", [])
 
     # La data se sincroniza de forma perezosa para no frenar el arranque.
+    general.asegurar()
     for p in projects:
         datos.asegurar(p.slug, p.path / "data")
 

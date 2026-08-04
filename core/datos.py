@@ -86,10 +86,12 @@ def sincronizar(slug: str, destino: Path, forzar: bool = False) -> dict:
                 resultado.update(ok=False,
                                  error=f"Fallo al bajar {nombre}: {e}")
                 continue
-            ts = origen.fecha(item["ruta"]) or int(time.time())
+            ts = (item.get("ts") or origen.fecha(item["ruta"])
+                  or int(time.time()))
         else:
             resultado["sin_cambios"] += 1
-            ts = previo.get("ts") or origen.fecha(item["ruta"]) or 0
+            ts = (previo.get("ts") or item.get("ts")
+                  or origen.fecha(item["ruta"]) or 0)
 
         nuevo_estado[nombre] = {"sha": item["sha"], "ts": ts}
         fechas[nombre] = ts

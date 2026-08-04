@@ -79,6 +79,34 @@
       <span class="adm-flag {{ 'fresco' if origen_ok else 'vencido' }}">{{ origen_detalle }}</span>
     </p>
 
+    {% if admite_subida %}
+    <form class="adm-subir" method="post" action="{{ url_for('admin.subir') }}"
+          enctype="multipart/form-data">
+      <input type="hidden" name="rango" value="{{ dias }}">
+      <label class="adm-subir-lab">Actualizar datos</label>
+      <select class="adm-input chico" name="destino" required aria-label="Destino">
+        <option value="">¿A qué dashboard pertenece?</option>
+        {% for p in proyectos %}
+        <option value="{{ p.slug }}">{{ p.titulo }}</option>
+        {% endfor %}
+        <option value="_general">Base anual · negocio general</option>
+      </select>
+      <input class="adm-file" type="file" name="archivo" accept=".csv,.xls,.xlsx"
+             required aria-label="Archivo">
+      <button class="adm-btn fuerte" type="submit">Subir y actualizar</button>
+    </form>
+    <p class="adm-nota bloque">
+      El archivo va directo al origen; la fecha de la tarjeta pasa a ser la de
+      esta subida. También puedes dejarlo en la carpeta desde tu computadora:
+      la web lo toma sola.
+      {% if general_ok %}
+        <span class="adm-flag fresco">Base anual · {{ general_meses }} meses · {{ general_fecha }}</span>
+      {% else %}
+        <span class="adm-flag sin-datos">Sin base anual: sube «Data_anual.csv» para activar las capas de contexto</span>
+      {% endif %}
+    </p>
+    {% endif %}
+
     <div class="adm-scroll">
     <table class="adm-tabla">
       <thead>

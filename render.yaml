@@ -35,7 +35,7 @@ services:
       # Correos con acceso al panel de administración (/admin).
       - key: ADMIN_EMAILS
         sync: false
-      # Origen de los datos: local | carpeta | github
+      # Origen de los datos: local | carpeta | dropbox | github
       # Recomendado: github, con un repo privado que tenga una carpeta por
       # proyecto. Da la fecha real de subida por archivo y evita redeploys.
       - key: DATA_ORIGEN
@@ -48,6 +48,15 @@ services:
         sync: false
       - key: DATA_PREFIJO
         sync: false
-      # Solo para DATA_ORIGEN=carpeta (disco montado o unidad de red).
+      # Solo para DATA_ORIGEN=carpeta (disco persistente o unidad de red).
       - key: DATA_CARPETA
+        sync: false
+      # Solo para DATA_ORIGEN=dropbox.
+      - key: DROPBOX_APP_KEY
+        sync: false
+      - key: DROPBOX_APP_SECRET
+        sync: false
+      - key: DROPBOX_REFRESH_TOKEN
+        sync: false
+      - key: DATA_CARPETA_DROPBOX
         sync: false

@@ -41,6 +41,7 @@ import pandas as pd
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from core.fechas import fecha_subida  # noqa: E402
+from core.general import capas_para  # noqa: E402
 from core.charts import dual_bar_chart, increment_bars, line_chart  # noqa: E402
 
 warnings.filterwarnings("ignore")
@@ -153,6 +154,7 @@ def _bloque_evolucion(rows, name_a, name_b, en_miles=False):
         "vol_unit": f"{name_a} vs. {name_b}, soles",
         "vol_chart": dual_bar_chart(
             points,
+            capas=capas_para([r["per"] for r in rows]),
             y_fmt=y_fmt,
             tip_fmt=lambda v: soles(v),
             name_a=name_a,
