@@ -38,14 +38,42 @@ COLS_MONTO = ["Monto Desembolsado Solarizado", "Monto Solarizado", "Monto"]
 COL_CERRADO = "Flag Contrato Cerrado"
 COL_CONTRATO = "Codigo de Contrato"
 
-COL_CANAL = "Canal"
-COL_MONEDA = "Moneda"
-COL_ESQUEMA = "Esquema"
-DIMENSIONES = [
-    ("canal", COL_CANAL, "Canal"),
-    ("moneda", COL_MONEDA, "Moneda"),
-    ("esquema", COL_ESQUEMA, "Esquema"),
+# Dimensiones del embudo. Cada una lista los nombres de columna que puede
+# tener en el export; se muestra SOLO si alguna existe en Data_anual.csv.
+# Asi, cuando el export sume una columna nueva (p. ej. "Tipo de Deuda" con
+# NOR / RYA), el filtro aparece solo, sin tocar codigo.
+DIMENSIONES_CANDIDATAS = [
+    ("canal", ["Canal"], "Canal"),
+    ("moneda", ["Moneda"], "Moneda"),
+    ("esquema", ["Esquema"], "Esquema"),
+    ("deuda", ["Tipo de Deuda", "Tipo Deuda", "Tipo de deuda", "Deuda",
+               "Clasificacion Deuda", "Clasificación Deuda"], "Tipo de deuda"),
+    ("fondo", ["Tipo de Fondo"], "Tipo de fondo"),
+    ("riesgo", ["Riesgo"], "Riesgo"),
 ]
+
+_cols_cache: tuple | None = None
+_cols_firma = None
+
+
+def dimensiones() -> list[tuple[str, str, str]]:
+    """[(clave, columna, etiqueta)] de las dimensiones disponibles hoy."""
+    global _cols_cache, _cols_firma
+    p = ruta()
+    if not p.exists():
+        return []
+    firma = (p.stat().st_mtime_ns, p.stat().st_size)
+    if _cols_cache is not None and _cols_firma == firma:
+        return list(_cols_cache)
+    df = _leer()
+    cols = set(df.columns) if df is not None else set()
+    encontradas = []
+    for clave, posibles, etiqueta in DIMENSIONES_CANDIDATAS:
+        col = next((c for c in posibles if c in cols), None)
+        if col:
+            encontradas.append((clave, col, etiqueta))
+    _cols_cache, _cols_firma = tuple(encontradas), firma
+    return encontradas
 
 # Los filtros del embudo viajan por contexto de request: los procesadores
 # llaman a capas_para(periodos) sin saber nada de ellos.
@@ -113,17 +141,19 @@ def opciones() -> list[dict]:
     """Valores disponibles por dimensión, para armar el embudo."""
     df = _leer()
     salida = []
-    for clave, col, etiqueta in DIMENSIONES:
+    for clave, col, etiqueta in dimensiones():
         vals = []
         if df is not None and col in df.columns:
             vals = sorted({str(x).strip() for x in df[col].dropna().unique()
                            if str(x).strip()})
-        salida.append({"clave": clave, "etiqueta": etiqueta, "valores": vals})
+        if vals:
+            salida.append({"clave": clave, "etiqueta": etiqueta,
+                           "valores": vals})
     return salida
 
 
 def _filtrar(df, valores: dict):
-    for clave, col, _ in DIMENSIONES:
+    for clave, col, _ in dimensiones():
         elegido = valores.get(clave)
         if elegido and col in df.columns:
             df = df[df[col].astype(str).str.strip().str.lower()
@@ -179,7 +209,7 @@ def serie_mensual(valores: dict | None = None) -> dict[int, dict]:
 
 def _sufijo_filtros() -> str:
     v = filtros_actuales()
-    partes = [v[k] for k, _, _ in DIMENSIONES if v.get(k)]
+    partes = [v[k] for k, _, _ in dimensiones() if v.get(k)]
     return f" · {' · '.join(partes)}" if partes else ""
 
 

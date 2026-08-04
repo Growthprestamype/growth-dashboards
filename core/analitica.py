@@ -23,7 +23,7 @@ from core import origen
 
 ARCHIVO = "eventos.json"
 MAX_EVENTOS = 8000            # varios meses de uso interno
-PERSISTIR_CADA_SEG = 120
+PERSISTIR_CADA_SEG = 45
 
 _lock = threading.Lock()
 _eventos: list[dict] = []
@@ -65,6 +65,39 @@ def guardar(forzar: bool = False) -> bool:
 # --- Registro -------------------------------------------------------------
 
 
+def instalar_guardado_automatico():
+    """Guarda la analitica cuando el servicio se apaga o se duerme.
+
+    Render manda SIGTERM antes de dormir el servicio o redesplegar: ahi se
+    fuerza la escritura al origen para no perder la cola de eventos. Nadie
+    tiene que pulsar nada nunca.
+    """
+    import atexit
+    import signal
+
+    def _cerrar(*_):
+        try:
+            guardar(forzar=True)
+        finally:
+            pass
+
+    atexit.register(_cerrar)
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            previo = signal.getsignal(sig)
+
+            def _handler(s, f, _previo=previo):
+                _cerrar()
+                if callable(_previo):
+                    _previo(s, f)
+                else:
+                    raise SystemExit(0)
+
+            signal.signal(sig, _handler)
+        except (ValueError, OSError):
+            pass  # fuera del hilo principal: basta con atexit
+
+
 def registrar(tipo: str, correo: str | None = None, slug: str | None = None,
               vista: str | None = None):
     """Anota un evento. Nunca interrumpe la navegacion si algo falla."""
@@ -82,7 +115,9 @@ def registrar(tipo: str, correo: str | None = None, slug: str | None = None,
             if len(_eventos) > MAX_EVENTOS + 500:
                 del _eventos[:-MAX_EVENTOS]
         _pendientes += 1
-        guardar()
+        # Un inicio de sesión es poco frecuente y demasiado valioso para
+        # dejarlo en la cola: se guarda al instante.
+        guardar(forzar=(tipo == "acceso"))
     except Exception as e:  # la analitica jamas debe romper una vista
         print("[analitica] no se pudo registrar:", e)
 

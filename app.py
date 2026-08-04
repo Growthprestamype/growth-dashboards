@@ -48,6 +48,10 @@ app.jinja_loader = ChoiceLoader(
 # Protege toda la plataforma detrás de un inicio de sesión.
 init_auth(app)
 
+# La analítica se guarda sola: por tiempo, al iniciar sesión alguien y al
+# apagarse el servicio (Render manda SIGTERM antes de dormirlo).
+analitica.instalar_guardado_automatico()
+
 # --- Registro y caché --------------------------------------------------
 
 _REGISTRY = {}
@@ -147,7 +151,8 @@ def project_view(slug, view):
         abort(404)
 
     filtros = general.fijar_filtros(
-        {clave: request.args.get(clave) for clave, _, _ in general.DIMENSIONES}
+        {clave: request.args.get(clave)
+         for clave, _, _ in general.dimensiones()}
     )
     refresh = request.args.get("refresh") == "1"
     data = get_project_data(project, refresh=refresh)

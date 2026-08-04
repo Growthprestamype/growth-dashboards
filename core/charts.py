@@ -95,8 +95,12 @@ def _reservar_derecha(capas):
 def _eje_derecho(parts, capa, indice, top_v, ticks, plot_top, plot_bot,
                  plot_right, fmt):
     """Etiquetas del eje derecho, alineadas a la grilla del eje izquierdo."""
-    x = plot_right + 10 + indice * ANCHO_EJE_DER
+    x = plot_right + 12 + indice * ANCHO_EJE_DER
     span = plot_bot - plot_top
+    if indice == 0:
+        parts.append(f'<line class="eje-sep" x1="{plot_right + 4}" '
+                     f'y1="{plot_top - 2}" x2="{plot_right + 4}" '
+                     f'y2="{plot_bot}"/>')
     for t in ticks:
         frac = (t / ticks[-1]) if ticks[-1] else 0
         y = plot_bot - frac * span
@@ -105,7 +109,7 @@ def _eje_derecho(parts, capa, indice, top_v, ticks, plot_top, plot_bot,
             f'{escape(fmt(frac * top_v))}</text>'
         )
     parts.append(
-        f'<text class="axis-tit der" x="{x}" y="{plot_top - 8:.1f}">'
+        f'<text class="axis-tit der" x="{x}" y="{plot_top - 7:.1f}">'
         f'{escape(capa.get("unidad", ""))}</text>'
     )
 
@@ -114,17 +118,23 @@ def _dibujar_fondo(parts, capa, xs, slot, top_v, plot_top, plot_bot,
                    plot_right, ticks, indice):
     """Barras tenues del negocio general, detras de la serie principal."""
     span = plot_bot - plot_top
-    ancho = min(slot * 0.86, 96)
+    ancho = min(slot * 0.66, 74)
     parts.append(f'<g data-capa="fondo" data-nombre="{escape(capa["nombre"])}">')
     for i, cx in enumerate(xs):
         v = capa["valores"][i]
         if v is None:
             continue
         h = (v / top_v) * span if top_v else 0
+        x0 = cx - ancho / 2
         parts.append(
-            f'<rect class="bar-fondo" x="{cx - ancho / 2:.1f}" '
+            f'<rect class="bar-fondo" x="{x0:.1f}" '
             f'y="{plot_bot - h:.1f}" width="{ancho:.1f}" height="{h:.1f}" '
             f'data-tip="{escape(capa["nombre"])} · {_fmt_casos(v)} casos"/>'
+        )
+        parts.append(
+            f'<line class="bar-fondo-tope" x1="{x0:.1f}" '
+            f'y1="{plot_bot - h:.1f}" x2="{x0 + ancho:.1f}" '
+            f'y2="{plot_bot - h:.1f}"/>'
         )
     _eje_derecho(parts, capa, indice, top_v, ticks, plot_top, plot_bot,
                  plot_right, _fmt_casos)
@@ -168,18 +178,27 @@ def _dibujar_base(parts, valores, nombre, top, plot_top, plot_bot,
     prom = sum(vals) / len(vals)
     span = plot_bot - plot_top
     y = plot_bot - (prom / top) * span if top else plot_bot
+    etiqueta = f"promedio {fmt(prom)}"
+    ancho_lab = len(etiqueta) * 6.4 + 14
+    # La etiqueta se coloca del lado donde las barras son más bajas, para
+    # que nunca tape la serie principal.
+    tercio = max(1, len(vals) // 3)
+    izq = max(vals[:tercio], default=0)
+    der = max(vals[-tercio:], default=0)
+    x_lab = (plot_left + 6 if izq <= der
+             else plot_right - ancho_lab - 2)
     parts.append(f'<g data-capa="base" data-nombre="{escape(nombre)}">')
     parts.append(
         f'<line class="base-line" x1="{plot_left}" y1="{y:.1f}" '
         f'x2="{plot_right}" y2="{y:.1f}"/>'
     )
     parts.append(
-        f'<rect class="base-caja" x="{plot_left + 4}" y="{y - 16:.1f}" '
-        f'width="{min(len(fmt(prom)) * 7.2 + 46, 190):.0f}" height="14" rx="2"/>'
+        f'<rect class="base-caja" x="{x_lab:.1f}" y="{y - 17:.1f}" '
+        f'width="{ancho_lab:.0f}" height="15" rx="2"/>'
     )
     parts.append(
-        f'<text class="base-lab" x="{plot_left + 8}" y="{y - 5:.1f}">'
-        f'prom. {escape(fmt(prom))}</text>'
+        f'<text class="base-lab" x="{x_lab + 7:.1f}" y="{y - 6:.1f}">'
+        f'{escape(etiqueta)}</text>'
     )
     parts.append("</g>")
 
@@ -405,23 +424,17 @@ def dual_bar_chart(points, *, y_fmt, tip_fmt=None,
             _dibujar_fondo(parts, capa, xs, slot, top_v, plot_top, plot_bot,
                            plot_right, ticks, idx)
 
-    # leyenda
-    lx = plot_right - 8
-    parts.append(
-        f'<g class="legend" text-anchor="end">'
-        f'<text class="lg-lab" x="{lx}" y="14">{escape(name_b)}</text>'
-        f'<rect class="lg-sw b" x="{lx - len(name_b) * 7 - 26}" y="5" '
-        f'width="12" height="12" rx="3"/>'
-        f'</g>'
-    )
-    lx2 = lx - len(name_b) * 7 - 44
-    parts.append(
-        f'<g class="legend" text-anchor="end">'
-        f'<text class="lg-lab" x="{lx2}" y="14">{escape(name_a)}</text>'
-        f'<rect class="lg-sw a" x="{lx2 - len(name_a) * 7 - 26}" y="5" '
-        f'width="12" height="12" rx="3"/>'
-        f'</g>'
-    )
+    # leyenda, de izquierda a derecha desde el borde del área de trazado
+    lx = PAD_L
+    for nombre, cls in ((name_a, "a"), (name_b, "b")):
+        parts.append(
+            f'<g class="legend">'
+            f'<rect class="lg-sw {cls}" x="{lx}" y="4" width="11" height="11" '
+            f'rx="2"/>'
+            f'<text class="lg-lab" x="{lx + 17}" y="14">{escape(nombre)}</text>'
+            f'</g>'
+        )
+        lx += 17 + len(nombre) * 6.6 + 22
 
     for i, p in enumerate(points):
         cx = xs[i]

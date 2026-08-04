@@ -256,9 +256,18 @@
   </div>
 
   <p class="adm-pie">
-    La analítica y los permisos se guardan en
-    {% if origen_externo %}el origen externo, bajo <code>_plataforma/</code>{% else %}<code>var/</code>, que es local y efímero{% endif %}.
-    {{ accion('guardar_analitica', txt='Guardar ahora', clase='adm-btn') }}
+    {% if origen_externo %}
+    <span class="adm-flag fresco">Guardado automático</span>
+    La analítica y los permisos se escriben solos en el origen
+    (<code>_plataforma/</code>): al iniciar sesión alguien, cada 45 s de
+    actividad y cuando Render duerme el servicio. No hay que pulsar nada,
+    y el historial sobrevive a los reinicios.
+    {% else %}
+    <span class="adm-flag vencido">Sin origen externo</span>
+    La analítica queda en <code>var/</code>, que Render borra al reiniciar.
+    Configura <code>DATA_ORIGEN</code> para conservarla.
+    {% endif %}
+    {{ accion('guardar_analitica', txt='Forzar guardado', clase='adm-btn') }}
   </p>
 </section>
 {% endblock %}

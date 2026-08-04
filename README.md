@@ -220,8 +220,8 @@ derecha** para no cruzarse con la del eje izquierdo:
 
 La **tuerca** junto al título de la gráfica permite encender y apagar cada
 capa; la elección se recuerda en el navegador. El **embudo**, a su lado,
-filtra la data histórica del negocio por **Canal** (Digital / Presencial),
-**Moneda** (PEN / USD) y **Esquema** (Cuota Fija, Crédito Puente, …): así se
+filtra la data histórica del negocio por **Canal**, **Moneda**, **Esquema**,
+**Tipo de deuda** (NOR, RYA…), **Tipo de fondo** y **Riesgo**: así se
 compara el experimento contra el segmento equivalente y no contra todo el
 negocio. Los filtros viajan en la URL (`?canal=Digital&esquema=Cuota+Fija`),
 de modo que una vista filtrada se puede compartir tal cual; el embudo se
@@ -229,6 +229,11 @@ marca en verde cuando hay algún filtro activo y «Limpiar» los quita. Cada
 combinación se cachea por separado. Si un mes no existe en la base
 anual (por ejemplo, las vistas de proyección con data de 2025), la capa
 simplemente no se dibuja.
+
+El embudo **se arma solo** a partir de las columnas que traiga el export: cada
+dimensión aparece únicamente si su columna existe en `Data_anual.csv`. Si
+mañana el export suma `Tipo de Deuda`, el filtro aparece sin tocar código
+(acepta los alias `Tipo Deuda`, `Deuda` y `Clasificacion Deuda`).
 
 La base anual se sube como cualquier otro archivo desde el panel, eligiendo
 **Base anual · negocio general**. Columnas que usa: `Periodo de Cierre`
@@ -258,8 +263,15 @@ no se puede conceder desde la interfaz, así nadie amplía sus propios permisos.
 
 La analítica (`eventos.json`), los permisos (`accesos.json`) y el estado de
 los dashboards (`dashboards.json`) se guardan en `_plataforma/` dentro del
-origen externo, de modo que sobreviven a los reinicios y redeploys de Render.
-Sin origen externo quedan en `var/`, que es efímero.
+origen externo, **de forma automática**: al iniciar sesión alguien, cada 45
+segundos de actividad y —clave en Render— cuando el servicio recibe SIGTERM
+antes de dormirse o redesplegarse. Nadie tiene que pulsar nada, y la actividad
+de madrugada queda registrada igual. Sin origen externo quedan en `var/`, que
+Render borra al reiniciar.
+
+Nota operativa: esto asume **un solo worker** de gunicorn (el default de
+`render.yaml`). Con varios workers, cada proceso tendría su propio búfer en
+memoria y se pisarían al escribir.
 
 ## Agregar un experimento nuevo
 
